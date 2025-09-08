@@ -1,9 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   joinByScientificName,
-  JoinedRecord,
-  JoinResult,
-  JoinStatistics,
+  joinByScientificNameVariants,
   JoinOptions,
 } from '@etl/join-logic';
 import { EBirdRawRecord, IBPRawRecord } from '@etl/csv-parser';
@@ -227,6 +225,76 @@ describe('Scientific Name Join Logic - TDD RED Phase', () => {
       expect(result.success).toBe(true);
       expect(result.matched.length).toBeGreaterThan(0);
       expect(endTime - startTime).toBeLessThan(50); // Should complete very quickly with small dataset
+    });
+  });
+
+  describe('Variant inclusion policy (C: species + subspecies + hybrids)', () => {
+    it('should not overwrite species with subspecies or hybrid and should include each when full scientific names differ', () => {
+      // Simulate Iceland Gull scenario
+      const ebirdVariants: EBirdRawRecord[] = [
+        {
+          category: 'species',
+          speciesCode: createEBirdCode('icegul'),
+          scientificName: createScientificName('Larus glaucoides'),
+          commonName: 'Iceland Gull',
+        },
+        {
+          category: 'issf',
+          speciesCode: createEBirdCode('kumgul1'),
+          scientificName: createScientificName('Larus glaucoides kumlieni'),
+          commonName: "Kumlien's Gull",
+        },
+        {
+          category: 'hybrid',
+          speciesCode: createEBirdCode('kumxtha'),
+          scientificName: createScientificName(
+            'Larus glaucoides x Larus thayeri'
+          ),
+          commonName: "Kumlien's x Thayer's Gull (hybrid)",
+        },
+      ];
+
+      const ibpVariants: IBPRawRecord[] = [
+        {
+          alpha4Code: createAlpha4Code('ICGU'),
+          scientificName: createScientificName('Larus glaucoides'),
+          commonName: 'Iceland Gull',
+          spec6Code: 'LARGLA',
+        },
+        {
+          alpha4Code: createAlpha4Code('KUGU'),
+          scientificName: createScientificName('Larus glaucoides kumlieni'),
+          commonName: "Kumlien's Gull",
+          spec6Code: 'LARGLK',
+        },
+        {
+          alpha4Code: createAlpha4Code('TKGU'),
+          scientificName: createScientificName(
+            'Larus glaucoides x Larus thayeri'
+          ),
+          commonName: "Kumlien's x Thayer's Gull",
+          spec6Code: 'LARGLT',
+        },
+      ];
+
+      const result = joinByScientificNameVariants(ebirdVariants, ibpVariants, {
+        variantPolicy: 'all',
+      });
+
+      // Current implementation will likely only match 3 if full names preserved; failing if normalization collapsed
+      // Expect 3 distinct matches under policy C
+      const matchedNames = result.matched.map((m) => m.scientificName).sort();
+      expect(matchedNames).toContain(createScientificName('Larus glaucoides'));
+      expect(matchedNames).toContain(
+        createScientificName('Larus glaucoides kumlieni')
+      );
+      expect(matchedNames).toContain(
+        createScientificName('Larus glaucoides x Larus thayeri')
+      );
+
+      // Ensure alpha4 codes unique and mapped correctly (no overwrite)
+      const alpha4s = result.matched.map((m) => m.alpha4Code).sort();
+      expect(alpha4s).toEqual(['ICGU', 'KUGU', 'TKGU']);
     });
   });
 });

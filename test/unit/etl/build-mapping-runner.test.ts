@@ -1,12 +1,13 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 import {
   DEFAULT_EBIRD_CSV,
   DEFAULT_IBP_AOS_CSV,
   CALVER_PATTERN,
-} from '../../../src/etl/config';
-import os from 'os';
+} from '@etl/config';
+import { runBuildMapping } from '@etl/build-mapping';
 
 // TDD: This test defines the expected contract for the ETL build runner (not yet implemented).
 // The implementation will live in `src/etl/build-mapping.ts` and export a function `runBuildMapping`.
@@ -43,26 +44,7 @@ afterAll(() => {
 });
 
 describe('ETL Build Runner (TDD - expected contract)', () => {
-  it('should export runBuildMapping function', async () => {
-    // Dynamic import (module does not yet exist -> RED phase)
-    let mod: any;
-    try {
-      mod = await import('../../../src/etl/build-mapping');
-    } catch (e) {
-      // Force explicit failure so intent is clear
-      expect.fail('Module src/etl/build-mapping.ts not implemented yet');
-    }
-    expect(typeof mod.runBuildMapping).toBe('function');
-  });
-
   it('should produce a canonical mapping JSON file with valid schema and metadata', async () => {
-    let runBuildMapping: any;
-    try {
-      ({ runBuildMapping } = await import('../../../src/etl/build-mapping'));
-    } catch (e) {
-      expect.fail('runBuildMapping not implemented');
-    }
-
     const mapVersion = '2024.09'; // Chosen CalVer for current dataset cycle
     const updatedAt = new Date().toISOString();
 

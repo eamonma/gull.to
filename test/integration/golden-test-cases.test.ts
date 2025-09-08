@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { parseEBirdCSV, parseIBPCSV } from '@etl/csv-parser';
-import { joinByScientificName } from '@etl/join-logic';
+import { joinByScientificNameVariants } from '@etl/join-logic';
 import { transformToMappingRecords } from '@etl/mapping-transform';
 import { createWorkerHandler } from '@infrastructure/worker-handler';
 import { RedirectService } from '@application/redirect-service';
@@ -73,10 +73,10 @@ describe('Golden Test Cases - Real Data Integration', () => {
     console.log(`✅ Parsed ${ibpAosResult.records!.length} IBP-AOS records`);
 
     // Join by scientific names with lenient options
-    const joinResult = joinByScientificName(
+    const joinResult = joinByScientificNameVariants(
       eBirdResult.records!,
       ibpAosResult.records!,
-      { strictMode: false }
+      { strictMode: false, variantPolicy: 'all' }
     );
 
     // For integration testing, allow join issues as long as we get substantial matches
@@ -84,9 +84,12 @@ describe('Golden Test Cases - Real Data Integration', () => {
       throw new Error('Join produced no matches');
     }
 
-    if (!joinResult.success && joinResult.matched!.length > 0) {
+    // Variant-aware join always reports success; we can still surface low match ratios if needed
+    const efficiency =
+      joinResult.matched!.length / ibpAosResult.records!.length;
+    if (efficiency < 0.7) {
       console.warn(
-        `⚠️  Join had issues but produced ${joinResult.matched!.length} matches - continuing`
+        `⚠️  Join efficiency below threshold: ${(efficiency * 100).toFixed(2)}%`
       );
     }
 
@@ -174,6 +177,50 @@ describe('Golden Test Cases - Real Data Integration', () => {
           );
         }
       });
+    });
+
+    it('should resolve extended golden code set (strict)', () => {
+      // Full golden list per instructions.md data section
+      const extended = [
+        'AMCR',
+        'NOCA',
+        'MALL',
+        'CANG',
+        'RTHA',
+        'HOSP',
+        'BLJA',
+        'HAWO',
+        'BCCH',
+        'TUVU',
+        'COHA',
+        'AMRO',
+      ];
+
+      const missing: string[] = [];
+      extended.forEach((alpha4) => {
+        const parseResult = redirectService.parsePath(`/g/${alpha4}`);
+        if (!parseResult.success) {
+          missing.push(alpha4 + ' (parse failed)');
+          return;
+        }
+        const lookupResult = redirectService.lookupAlpha4(
+          parseResult.alpha4Code!
+        );
+        if (!lookupResult.success) {
+          missing.push(alpha4 + ' (not found)');
+          return;
+        }
+        // Basic sanity on fields
+        expect(lookupResult.mappingRecord?.ebird6).toMatch(/^[a-z0-9xy]{4,8}$/);
+        expect(lookupResult.mappingRecord?.common_name.length).toBeGreaterThan(
+          0
+        );
+      });
+
+      if (missing.length > 0) {
+        console.error('Missing golden codes:', missing);
+      }
+      expect(missing).toHaveLength(0);
     });
 
     it('should handle unknown alpha4 codes gracefully', () => {

@@ -10,6 +10,7 @@ import {
   isValidScientificName,
 } from '@domain/types';
 import { csvParse } from 'd3-dsv';
+import { applyGenusAdjustments } from './genus-adjustments';
 
 // Raw record interfaces for parsed CSV data
 export interface EBirdRawRecord {
@@ -64,13 +65,10 @@ export interface IBPParseOptions {
   readonly excludeSubspecies?: boolean; // skip rows where SP column is '+'
 }
 
-// Normalize scientific name: convert trinomial or group names to simple binomial
+// Preserve full scientific name (binomial, trinomial, hybrid, slash). We'll derive binomial as needed elsewhere.
 function normalizeScientificName(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length >= 2) {
-    return `${parts[0]} ${parts[1]}`;
-  }
-  return name.trim();
+  const cleaned = name.trim().replace(/\s+/g, ' ');
+  return applyGenusAdjustments(cleaned);
 }
 
 // Utility: remove BOM
@@ -214,11 +212,8 @@ export function parseEBirdCSV(
       return;
     }
 
-    if (
-      scientificNameRaw.includes(' x ') ||
-      scientificNameRaw.includes('/') ||
-      scientificNameRaw.includes(' sp.')
-    ) {
+    // For variant-inclusive policy C we keep hybrids and slash forms; continue skipping indeterminate ' sp.' patterns
+    if (scientificNameRaw.includes(' sp.')) {
       skippedRecords++;
       return;
     }
@@ -362,6 +357,13 @@ export function parseIBPCSV(
     }
 
     const normalizedScientificName = normalizeScientificName(scientificNameRaw);
+    // Skip clearly non-species group-level aggregates (family/subfamily or generic placeholders)
+    const groupLevelPattern = /(gen\.?,?\s*sp\.?\)?)/i; // e.g., '(gen. sp.)', '(gen, sp)'
+    if (groupLevelPattern.test(scientificNameRaw)) {
+      skippedRecords++;
+      return;
+    }
+
     if (!isValidScientificName(normalizedScientificName)) {
       errorRecords++;
       errors.push({

@@ -1,7 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
 import { parseEBirdCSV, parseIBPCSV } from './csv-parser';
-import { joinByScientificName } from './join-logic';
+import { joinByScientificNameVariants } from './join-logic';
 import { transformToMappingRecords } from './mapping-transform';
 import {
   DEFAULT_EBIRD_CSV,
@@ -45,13 +46,14 @@ export async function runBuildMapping(
   const ebirdRaw = fs.readFileSync(ebirdCsvPath, 'utf-8');
   const ibpRaw = fs.readFileSync(ibpAosCsvPath, 'utf-8');
 
-  const ebirdParsed = parseEBirdCSV(ebirdRaw, { filterSpeciesOnly: true });
+  // Variant policy C: include species, subspecies, hybrids
+  const ebirdParsed = parseEBirdCSV(ebirdRaw, { filterSpeciesOnly: false });
   const ibpParsed = parseIBPCSV(ibpRaw);
 
-  const joinResult = joinByScientificName(
+  const joinResult = joinByScientificNameVariants(
     ebirdParsed.records || [],
     ibpParsed.records || [],
-    { strictMode: false }
+    { strictMode: false, variantPolicy: 'all' }
   );
 
   const transform = transformToMappingRecords(joinResult.matched || [], {
@@ -81,10 +83,12 @@ export async function runBuildMapping(
     mapVersion: options.mapVersion,
   };
 }
-
 // CLI support when executed directly with tsx / node
-if (import.meta.main) {
-  const mapVersion = process.env.MAP_VERSION || '2024.09';
+const isMainModule =
+  process.argv[1] && process.argv[1] === fileURLToPath(import.meta.url);
+
+if (isMainModule) {
+  const mapVersion = process.env['MAP_VERSION'] || '2024.09';
   const updatedAt = new Date().toISOString();
   runBuildMapping({ mapVersion, updatedAt })
     .then((r) => {

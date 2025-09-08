@@ -3,7 +3,6 @@ import {
   parseEBirdCSV,
   parseIBPCSV,
   EBirdRawRecord,
-  IBPRawRecord,
   CSVParseResult,
   CSVValidationError,
 } from '@etl/csv-parser';
@@ -16,25 +15,27 @@ describe('CSV Parser - TDD RED Phase', () => {
 3,species,mallad,,Mallard,Anas platyrhynchos,Anseriformes,"Anatidae (Ducks, Geese, and Waterfowl)",Waterfowl,
 4,hybrid,croxfi,,American Crow x Fish Crow (hybrid),Corvus brachyrhynchos x ossifragus,Passeriformes,Corvidae (Crows and Jays),Corvids,`;
 
-    it('should parse valid eBird CSV with BOM', () => {
+    it('should parse valid eBird CSV with BOM including hybrid (variant policy C)', () => {
       const result = parseEBirdCSV(validEBirdCSV);
-      
+
       expect(result.success).toBe(true);
-      expect(result.records).toHaveLength(2); // hybrid record is skipped
-      
-      const firstRecord = result.records[0]!;
-      expect(firstRecord.category).toBe('species');
-      expect(firstRecord.speciesCode).toBe('amecro');
-      expect(firstRecord.scientificName).toBe(createScientificName('Corvus brachyrhynchos'));
-      expect(firstRecord.commonName).toBe('American Crow');
+      expect(result.records).toHaveLength(3); // hybrid now included
+
+      const hybrid = result.records.find((r) => r.category === 'hybrid');
+      // eBird row uses full form "Corvus brachyrhynchos x ossifragus" (second genus omitted is allowed); validator accepts shorthand
+      expect(hybrid?.scientificName).toBe(
+        createScientificName('Corvus brachyrhynchos x ossifragus')
+      );
     });
 
     it('should filter to species category only by default', () => {
       const result = parseEBirdCSV(validEBirdCSV, { filterSpeciesOnly: true });
-      
+
       expect(result.success).toBe(true);
       expect(result.records).toHaveLength(2); // only species, hybrid already skipped due to scientific name
-      expect(result.records.every((r: any) => r.category === 'species')).toBe(true);
+      expect(result.records.every((r: any) => r.category === 'species')).toBe(
+        true
+      );
     });
 
     it('should handle malformed CSV with validation errors', () => {
@@ -42,7 +43,7 @@ describe('CSV Parser - TDD RED Phase', () => {
 invalid,data,row`;
 
       const result = parseEBirdCSV(malformedCSV);
-      
+
       expect(result.success).toBe(false);
       expect(result.errors).toHaveLength(1);
       expect(result.errors[0]?.type).toBe('MISSING_COLUMNS');
@@ -53,7 +54,7 @@ invalid,data,row`;
 2,species,amecro,,American Crow,corvus brachyrhynchos,Passeriformes,Corvidae,Corvids,`; // lowercase genus
 
       const result = parseEBirdCSV(invalidScientificNameCSV);
-      
+
       expect(result.success).toBe(false);
       expect(result.errors).toHaveLength(1);
       expect(result.errors[0]?.type).toBe('INVALID_SCIENTIFIC_NAME');
@@ -68,31 +69,37 @@ invalid,data,row`;
 
     it('should parse valid IBP CSV', () => {
       const result = parseIBPCSV(validIBPCSV);
-      
+
       expect(result.success).toBe(true);
       expect(result.records).toHaveLength(3);
-      
+
       const firstRecord = result.records[0]!;
       expect(firstRecord.alpha4Code).toBe('AMCR');
-      expect(firstRecord.scientificName).toBe(createScientificName('Corvus brachyrhynchos'));
+      expect(firstRecord.scientificName).toBe(
+        createScientificName('Corvus brachyrhynchos')
+      );
       expect(firstRecord.commonName).toBe('American Crow');
       expect(firstRecord.spec6Code).toBe('CORAME');
     });
 
     it('should exclude subspecies/morphs by default', () => {
       const result = parseIBPCSV(validIBPCSV, { excludeSubspecies: true });
-      
+
       expect(result.success).toBe(true);
       expect(result.records).toHaveLength(2); // excludes the + marked record
-      expect(result.records.every((r: any) => !r.alpha4Code.startsWith('+'))).toBe(true);
+      expect(
+        result.records.every((r: any) => !r.alpha4Code.startsWith('+'))
+      ).toBe(true);
     });
 
-    it('should normalize trinomial to binomial scientific names', () => {
+    it('should preserve trinomial scientific names for subspecies (variant policy C)', () => {
       const result = parseIBPCSV(validIBPCSV);
-      
-      // The subspecies record should have normalized scientific name
-      const subspeciesRecord = result.records.find((r: any) => r.alpha4Code === 'LSGW');
-      expect(subspeciesRecord?.scientificName).toBe(createScientificName('Anser caerulescens')); // trinomial → binomial
+      const subspeciesRecord = result.records.find(
+        (r: any) => r.alpha4Code === 'LSGW'
+      );
+      expect(subspeciesRecord?.scientificName).toBe(
+        createScientificName('Anser caerulescens caerulescens')
+      );
     });
 
     it('should validate alpha4 code format during parsing', () => {
@@ -100,7 +107,7 @@ invalid,data,row`;
 ,,AM1R,,,Invalid Code,,Corvus brachyrhynchos,CORAME,`; // contains number
 
       const result = parseIBPCSV(invalidAlpha4CSV);
-      
+
       expect(result.success).toBe(false);
       expect(result.errors).toHaveLength(1);
       expect(result.errors[0]?.type).toBe('INVALID_ALPHA4_CODE');
@@ -135,7 +142,11 @@ invalid,data,row`;
       };
 
       expect(result.stats.totalRows).toBe(100);
-      expect(result.stats.validRecords + result.stats.skippedRecords + result.stats.errorRecords).toBe(100);
+      expect(
+        result.stats.validRecords +
+          result.stats.skippedRecords +
+          result.stats.errorRecords
+      ).toBe(100);
     });
   });
 });

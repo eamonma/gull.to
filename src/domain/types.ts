@@ -24,7 +24,7 @@ export interface MappingRecord {
 }
 
 // Business logic result types
-export type RedirectResult = 
+export type RedirectResult =
   | {
       readonly type: 'redirect';
       readonly destination: string;
@@ -48,28 +48,56 @@ export function isValidEBirdCode(input: string): input is EBirdCode {
 }
 
 export function isValidScientificName(input: string): input is ScientificName {
-  // Binomial nomenclature: Genus species (both capitalized genus, lowercase species)
-  return /^[A-Z][a-z]+ [a-z]+$/.test(input);
+  // Accept:
+  //  - Binomial: Genus species
+  //  - Trinomial (subspecies/form): Genus species subspecies
+  //  - Simple hybrid: Genus species x Genus species (optional third epithet each side)
+  //  - Slash form: Genus species / Genus species
+  // These expansions enable variant-inclusive policy (species + subspecies + hybrids/slashes)
+  // while remaining conservative about casing and token structure.
+  // Simpler to implement as multiple regex attempts for clarity
+  const binomial = /^[A-Z][a-z]+ [a-z]+$/;
+  const trinomial = /^[A-Z][a-z]+ [a-z]+ [a-z]+$/;
+  const hybrid =
+    /^[A-Z][a-z]+ [a-z]+(?: [a-z]+)? (?:x|×|\/) [A-Z][a-z]+ [a-z]+(?: [a-z]+)?$/;
+  // Shorthand hybrid where second genus omitted, implying same genus as first
+  const hybridShorthand =
+    /^[A-Z][a-z]+ [a-z]+(?: [a-z]+)? (?:x|×|\/) [a-z]+(?: [a-z]+)?$/;
+  // Slash shorthand where second genus implied: Genus species1/species2
+  const slashShorthand = /^[A-Z][a-z]+ [a-z]+\/[a-z]+$/;
+  return (
+    binomial.test(input) ||
+    trinomial.test(input) ||
+    hybrid.test(input) ||
+    hybridShorthand.test(input) ||
+    slashShorthand.test(input)
+  );
 }
 
 // Factory functions with validation
 export function createAlpha4Code(input: string): Alpha4Code {
   if (!isValidAlpha4Code(input)) {
-    throw new Error(`Invalid Alpha4Code format: ${input}. Must be exactly 4 uppercase letters A-Z.`);
+    throw new Error(
+      `Invalid Alpha4Code format: ${input}. Must be exactly 4 uppercase letters A-Z.`
+    );
   }
   return input as Alpha4Code;
 }
 
 export function createEBirdCode(input: string): EBirdCode {
   if (!isValidEBirdCode(input)) {
-    throw new Error(`Invalid EBirdCode format: ${input}. Must be 4-8 characters: lowercase letters, numbers, and x/y prefixes.`);
+    throw new Error(
+      `Invalid EBirdCode format: ${input}. Must be 4-8 characters: lowercase letters, numbers, and x/y prefixes.`
+    );
   }
   return input as EBirdCode;
 }
 
 export function createScientificName(input: string): ScientificName {
   if (!isValidScientificName(input)) {
-    throw new Error(`Invalid ScientificName format: ${input}. Must be proper binomial nomenclature (e.g., "Corvus americanus").`);
+    throw new Error(
+      `Invalid ScientificName format: ${input}. Accepted forms: binomial (Genus species), trinomial (Genus species subspecies), simple hybrid or slash forms (Genus species [subspecies]? x|/ Genus species [subspecies]?).`
+    );
   }
   return input as ScientificName;
 }
@@ -84,16 +112,33 @@ export function createMappingRecord(record: {
   readonly updated_at: string;
 }): MappingRecord {
   // Validate all required fields are present per instructions.md:163-172
-  const requiredFields = ['alpha4', 'ebird6', 'common_name', 'scientific_name', 'source', 'source_version', 'updated_at'];
-  const missing = requiredFields.filter(field => !(field in record) || record[field as keyof typeof record] === undefined || record[field as keyof typeof record] === '');
-  
+  const requiredFields = [
+    'alpha4',
+    'ebird6',
+    'common_name',
+    'scientific_name',
+    'source',
+    'source_version',
+    'updated_at',
+  ];
+  const missing = requiredFields.filter(
+    (field) =>
+      !(field in record) ||
+      record[field as keyof typeof record] === undefined ||
+      record[field as keyof typeof record] === ''
+  );
+
   if (missing.length > 0) {
-    throw new Error(`Missing required MappingRecord fields: ${missing.join(', ')}`);
+    throw new Error(
+      `Missing required MappingRecord fields: ${missing.join(', ')}`
+    );
   }
 
   // Validate ISO date format for updated_at
   if (isNaN(Date.parse(record.updated_at))) {
-    throw new Error(`Invalid updated_at date format: ${record.updated_at}. Must be valid ISO date string.`);
+    throw new Error(
+      `Invalid updated_at date format: ${record.updated_at}. Must be valid ISO date string.`
+    );
   }
 
   return { ...record };
