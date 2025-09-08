@@ -1,0 +1,36 @@
+name = "gull-to-redirect"
+main = "src/index.ts"
+compatibility_date = "2024-09-08"
+compatibility_flags = ["nodejs_compat"]
+
+# Environment variables
+[vars]
+ENVIRONMENT = "development"
+
+# Production environment
+[env.production]
+name = "gull-to-redirect-prod"
+routes = [
+  { pattern = "gull.to/g/*", zone_name = "gull.to" }
+]
+
+[env.production.vars]
+ENVIRONMENT = "production"
+
+# Staging environment  
+[env.staging]
+name = "gull-to-redirect-staging"
+routes = [
+  { pattern = "staging.gull.to/g/*", zone_name = "gull.to" }
+]
+
+[env.staging.vars]
+ENVIRONMENT = "staging"
+
+# Build configuration
+[build]
+command = "npm run build"
+
+# Analytics and observability
+[observability]
+enabled = true
