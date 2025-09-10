@@ -79,6 +79,7 @@ export class RedirectService {
   private readonly mappingLookup: Map<string, MappingRecord>;
   private readonly config: RedirectServiceConfig;
   private readonly stats: MutableServiceStats;
+  private readonly gullRecords: readonly MappingRecord[]; // cached subset for random gull
 
   constructor(
     mappingData: readonly MappingRecord[],
@@ -91,6 +92,11 @@ export class RedirectService {
     for (const record of mappingData) {
       this.mappingLookup.set(record.alpha4, record);
     }
+
+    // Precompute gull subset (simple heuristic: common name contains 'gull' case-insensitive)
+    this.gullRecords = mappingData.filter((r) =>
+      /gull/i.test(r.common_name)
+    );
 
     // Initialize statistics
     this.stats = {
@@ -327,5 +333,15 @@ export class RedirectService {
    */
   getStats(): ServiceStats {
     return { ...this.stats }; // Return immutable copy
+  }
+
+  /**
+   * Get a random gull mapping record (subset where common_name contains 'Gull').
+   * Returns null when no gull records exist.
+   */
+  getRandomGullRecord(): MappingRecord | null {
+    if (this.gullRecords.length === 0) return null;
+    const idx = Math.floor(Math.random() * this.gullRecords.length);
+    return this.gullRecords[idx] || null;
   }
 }

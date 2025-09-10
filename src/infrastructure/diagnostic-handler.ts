@@ -22,7 +22,11 @@ export class DiagnosticHandler {
    * Check if path is a diagnostic endpoint
    */
   isDiagnosticPath(pathname: string): boolean {
-    return pathname === '/g/_health' || pathname.startsWith('/g/_meta/');
+    return (
+      pathname === '/g/_health' ||
+      pathname.startsWith('/g/_meta/') ||
+      pathname === '/g/_random_gull'
+    );
   }
 
   /**
@@ -37,6 +41,10 @@ export class DiagnosticHandler {
 
     if (pathname.startsWith('/g/_meta/')) {
       return this.createMetaResponse(pathname, baseHeaders);
+    }
+
+    if (pathname === '/g/_random_gull') {
+      return this.createRandomGullResponse(baseHeaders);
     }
 
     // Should not reach here due to isDiagnosticPath check
@@ -137,5 +145,29 @@ export class DiagnosticHandler {
       'X-Gull-Worker': this.config.workerVersion,
       'X-Gull-Map': this.config.mapVersion,
     };
+  }
+
+  /**
+   * Create random gull redirect response.
+   */
+  private createRandomGullResponse(headers: Record<string, string>): Response {
+    try {
+      const gull = this.redirectService.getRandomGullRecord?.();
+      if (!gull) {
+        return ResponseFactory.createInternalErrorResponse(
+          new Error('No gull species available'),
+          this.config.environment !== 'production',
+          headers
+        );
+      }
+      const destination = this.redirectService.generateBOWUrl(gull.ebird6);
+      return ResponseFactory.createRedirectResponse(destination, headers);
+    } catch (error) {
+      return ResponseFactory.createInternalErrorResponse(
+        error,
+        this.config.environment !== 'production',
+        headers
+      );
+    }
   }
 }
