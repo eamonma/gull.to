@@ -10,9 +10,7 @@ ENVIRONMENT = "development"
 # Production environment
 [env.production]
 name = "gull-to-redirect-prod"
-routes = [
-  { pattern = "gull.to/g/*", zone_name = "gull.to" }
-]
+routes = [{ pattern = "gull.to/g/*", zone_name = "gull.to" }]
 
 [env.production.vars]
 ENVIRONMENT = "production"
@@ -20,16 +18,12 @@ ENVIRONMENT = "production"
 # Staging environment  
 [env.staging]
 name = "gull-to-redirect-staging"
-routes = [
-  { pattern = "staging.gull.to/g/*", zone_name = "gull.to" }
-]
+routes = [{ pattern = "staging.gull.to/g/*", zone_name = "gull.to" }]
 
 [env.staging.vars]
 ENVIRONMENT = "staging"
 
-# Build configuration
-[build]
-command = "npm run build"
+# No custom build command: letting Wrangler bundle directly to avoid recursion.
 
 # Analytics and observability
 [observability]

@@ -4,16 +4,20 @@
 import mappingData from '../data/mapping/map-2024.09.json';
 import { createWorkerHandler } from '@infrastructure/worker-handler';
 import { MappingRecord } from '@domain/types';
+import { resolveVersions } from '@infrastructure/versioning';
 
-// Central place to define versions until automated.
-const WORKER_VERSION = 'v0.1.0'; // TODO: inject via build/tag automation.
-// Derive map version from filename convention map-YYYY.MM.json
-const MAP_VERSION = '2024.09';
+// Default fallback versions (overridden by environment variables in CI/CD)
+const DEFAULT_WORKER_VERSION = 'v0.1.0';
+const DEFAULT_MAP_VERSION = '2024.09'; // derived from imported file name; keep in sync with selected mapping file
 
 // Infer environment from Wrangler vars (ENVIRONMENT) falling back to development.
-function inferEnvironment(
-  env: Record<string, any>
-): 'production' | 'staging' | 'development' | 'testing' {
+type DeploymentEnvironment =
+  | 'production'
+  | 'staging'
+  | 'development'
+  | 'testing';
+
+function inferEnvironment(env: Record<string, unknown>): DeploymentEnvironment {
   const raw =
     env && env['ENVIRONMENT']
       ? String(env['ENVIRONMENT']).toLowerCase()
@@ -26,25 +30,55 @@ function inferEnvironment(
 
 // Lazy init pattern to avoid re-parsing on each request.
 let handler: ReturnType<typeof createWorkerHandler> | null = null;
+let cachedEnvFingerprint: string | null = null;
 
-function getHandler(env: Record<string, any>) {
-  if (!handler) {
+function envFingerprint(env: Record<string, unknown>): string {
+  return [
+    env['ENVIRONMENT'],
+    env['GULL_WORKER_VERSION'],
+    env['GULL_MAP_VERSION'],
+  ].join('||');
+}
+
+function getHandler(
+  env: Record<string, unknown>
+): ReturnType<typeof createWorkerHandler> {
+  const fp = envFingerprint(env);
+  if (!handler || fp !== cachedEnvFingerprint) {
+    const { workerVersion, mapVersion } = resolveVersions(env, {
+      worker: DEFAULT_WORKER_VERSION,
+      map: DEFAULT_MAP_VERSION,
+    });
     handler = createWorkerHandler({
       mappingData: mappingData as unknown as readonly MappingRecord[],
-      workerVersion: WORKER_VERSION,
-      mapVersion: MAP_VERSION,
+      workerVersion,
+      mapVersion,
       environment: inferEnvironment(env),
     });
+    cachedEnvFingerprint = fp;
   }
   return handler;
+}
+
+// Cloudflare's ExecutionContext type comes from @cloudflare/workers-types.
+// Define a minimal structural type here to avoid relying on ambient any.
+interface CFExecutionContext {
+  readonly waitUntil: (promise: Promise<unknown>) => void;
+  readonly passThroughOnException?: () => void;
 }
 
 export default {
   async fetch(
     request: Request,
-    env: Record<string, any>,
-    ctx: ExecutionContext
+    env: Record<string, unknown>,
+    ctx: CFExecutionContext
   ): Promise<Response> {
     return getHandler(env).fetch(request, env, ctx);
   },
 };
+
+// Test-only reset utility (not documented or used in production).
+export function __resetForTests(): void {
+  handler = null;
+  cachedEnvFingerprint = null;
+}

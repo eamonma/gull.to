@@ -1,4 +1,9 @@
-import { MappingRecord, Alpha4Code, EBirdCode, isValidAlpha4Code } from '@domain/types';
+import {
+  MappingRecord,
+  Alpha4Code,
+  EBirdCode,
+  isValidAlpha4Code,
+} from '@domain/types';
 
 // Request/Response interfaces for clean contracts
 export interface RedirectRequest {
@@ -17,13 +22,16 @@ export interface RedirectResponse {
   };
 }
 
-// Path parsing result with comprehensive error handling  
+// Path parsing result with comprehensive error handling
 export interface PathParseResult {
   readonly success: boolean;
   readonly namespace?: string;
   readonly alpha4Code?: Alpha4Code;
   readonly error?: {
-    readonly type: 'INVALID_NAMESPACE' | 'INVALID_ALPHA4_FORMAT' | 'MALFORMED_PATH';
+    readonly type:
+      | 'INVALID_NAMESPACE'
+      | 'INVALID_ALPHA4_FORMAT'
+      | 'MALFORMED_PATH';
     readonly message: string;
   };
 }
@@ -49,6 +57,15 @@ export interface ServiceStats {
   readonly errorResponses: number;
 }
 
+interface MutableServiceStats {
+  totalLookups: number;
+  successfulLookups: number;
+  unknownLookups: number;
+  totalRequests: number;
+  successfulRedirects: number;
+  errorResponses: number;
+}
+
 // Service configuration
 export interface RedirectServiceConfig {
   readonly workerVersion: string;
@@ -61,11 +78,14 @@ export interface RedirectServiceConfig {
 export class RedirectService {
   private readonly mappingLookup: Map<string, MappingRecord>;
   private readonly config: RedirectServiceConfig;
-  private readonly stats: ServiceStats;
+  private readonly stats: MutableServiceStats;
 
-  constructor(mappingData: readonly MappingRecord[], config: RedirectServiceConfig) {
+  constructor(
+    mappingData: readonly MappingRecord[],
+    config: RedirectServiceConfig
+  ) {
     this.config = config;
-    
+
     // Build efficient lookup map for O(1) alpha4 → mapping resolution
     this.mappingLookup = new Map();
     for (const record of mappingData) {
@@ -100,11 +120,11 @@ export class RedirectService {
 
     // Remove query string per instructions.md:53, but preserve structure for parsing
     const pathWithoutQuery = path.split('?')[0]!;
-    
+
     // Parse path segments (don't filter empty segments yet to detect /g/ case)
     const allSegments = pathWithoutQuery.split('/');
-    const segments = allSegments.filter(s => s.length > 0);
-    
+    const segments = allSegments.filter((s) => s.length > 0);
+
     if (segments.length === 0) {
       return {
         success: false,
@@ -155,7 +175,7 @@ export class RedirectService {
       };
     }
 
-    // Normalize to uppercase per instructions.md:57  
+    // Normalize to uppercase per instructions.md:57
     const alpha4Normalized = (alpha4Raw || '').toUpperCase();
 
     // Validate alpha4 format per instructions.md:58
@@ -181,12 +201,12 @@ export class RedirectService {
    */
   lookupAlpha4(alpha4: Alpha4Code): LookupResult {
     // Update statistics
-    (this.stats as any).totalLookups++;
+    this.stats.totalLookups++;
 
     const mappingRecord = this.mappingLookup.get(alpha4);
 
     if (!mappingRecord) {
-      (this.stats as any).unknownLookups++;
+      this.stats.unknownLookups++;
       return {
         success: false,
         error: {
@@ -196,7 +216,7 @@ export class RedirectService {
       };
     }
 
-    (this.stats as any).successfulLookups++;
+    this.stats.successfulLookups++;
     return {
       success: true,
       ebird6Code: mappingRecord.ebird6,
@@ -222,54 +242,65 @@ export class RedirectService {
    */
   processRedirect(request: RedirectRequest): RedirectResponse {
     // Update request statistics
-    (this.stats as any).totalRequests++;
+    this.stats.totalRequests++;
 
     try {
       // Parse the request path
       const parseResult = this.parsePath(request.path);
 
       if (!parseResult.success) {
-        (this.stats as any).errorResponses++;
+        this.stats.errorResponses++;
         return {
           status: 400,
           headers: this.getStandardHeaders(),
           error: {
-            type: parseResult.error!.type,
-            message: parseResult.error!.message,
+            type: parseResult.error?.type ?? 'INVALID_INPUT',
+            message: parseResult.error?.message ?? 'Invalid input',
           },
         };
       }
 
       // Lookup the alpha4 code
-      const lookupResult = this.lookupAlpha4(parseResult.alpha4Code!);
+      const alpha4Code = parseResult.alpha4Code;
+      if (!alpha4Code) {
+        this.stats.errorResponses++;
+        return {
+          status: 400,
+          headers: this.getStandardHeaders(),
+          error: {
+            type: 'INVALID_ALPHA4_FORMAT',
+            message: 'Alpha4 code missing after parse',
+          },
+        };
+      }
+      const lookupResult = this.lookupAlpha4(alpha4Code);
 
       let destinationUrl: string;
       let redirectType: 'success' | 'unknown';
 
       if (lookupResult.success) {
         // Successful lookup - redirect to specific BOW species page
-        destinationUrl = this.generateBOWUrl(lookupResult.ebird6Code!);
+        destinationUrl = this.generateBOWUrl(lookupResult.ebird6Code ?? null);
         redirectType = 'success';
-        (this.stats as any).successfulRedirects++;
+        this.stats.successfulRedirects++;
       } else {
         // Unknown code - redirect to BOW home per instructions.md:75
         destinationUrl = this.generateBOWUrl(null);
         redirectType = 'unknown';
-        (this.stats as any).successfulRedirects++; // Still a successful redirect, just to fallback
+        this.stats.successfulRedirects++; // Still a successful redirect, just to fallback
       }
 
       return {
         status: 302, // Temporary redirect per instructions.md:70
         headers: {
           ...this.getStandardHeaders(),
-          'Location': destinationUrl,
+          Location: destinationUrl,
           'Cache-Control': 'private, max-age=0', // Per instructions.md:70
         },
         redirectType,
       };
-
     } catch (error) {
-      (this.stats as any).errorResponses++;
+      this.stats.errorResponses++;
       return {
         status: 500,
         headers: this.getStandardHeaders(),

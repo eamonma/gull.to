@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 
 // We import the default export which should be the fetch handler object.
-import workerModule from '../../../src/index';
+import workerModule, { __resetForTests } from '../../../src/index';
 import mappingData from '../../../data/mapping/map-2024.09.json';
 
 // Minimal mocks for Cloudflare bindings.
@@ -52,6 +52,20 @@ describe('Worker index entrypoint', () => {
   it('exposes a fetch method', () => {
     expect(workerModule).toBeDefined();
     expect(typeof workerModule.fetch).toBe('function');
+  });
+
+  it('honors env overrides for version headers after reset', async () => {
+    __resetForTests();
+    const env = {
+      ENVIRONMENT: 'staging',
+      GULL_WORKER_VERSION: 'v9.9.9',
+      GULL_MAP_VERSION: '2099.12',
+    } as any;
+    const ctx = new MockExecutionContext();
+    const req = new MockRequest('https://gull.to/g/AMCR');
+    const res: Response = await workerModule.fetch(req as any, env, ctx);
+    expect(res.headers.get('X-Gull-Worker')).toBe('v9.9.9');
+    expect(res.headers.get('X-Gull-Map')).toBe('2099.12');
   });
 
   it('handles a known alpha4 redirect with mapping loaded once', async () => {

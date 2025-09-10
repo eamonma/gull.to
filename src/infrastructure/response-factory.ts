@@ -3,12 +3,11 @@
  * Implements factory pattern for better maintainability and consistency
  */
 export class ResponseFactory {
-  
   /**
    * Create a JSON response with standard headers
    */
   static createJsonResponse(
-    data: any,
+    data: unknown,
     status: number = 200,
     additionalHeaders: Record<string, string> = {}
   ): Response {
@@ -31,7 +30,7 @@ export class ResponseFactory {
     return new Response(null, {
       status: 302,
       headers: {
-        'Location': location,
+        Location: location,
         'Cache-Control': 'private, max-age=0',
         ...additionalHeaders,
       },
@@ -71,7 +70,7 @@ export class ResponseFactory {
       'METHOD_NOT_ALLOWED',
       `Only ${allowedMethods.join(' and ')} methods are allowed`,
       {
-        'Allow': allowedMethods.join(', '),
+        Allow: allowedMethods.join(', '),
         ...additionalHeaders,
       }
     );

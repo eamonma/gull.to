@@ -86,7 +86,7 @@ export function parseEBirdCSV(
   const { filterSpeciesOnly = false } = options;
   const cleanContent = stripBOM(csvContent);
 
-  let rows: any[];
+  let rows: Array<Record<string, string>>;
   try {
     rows = csvParse(cleanContent);
   } catch (e) {
@@ -143,7 +143,8 @@ export function parseEBirdCSV(
     'SPECIES_GROUP',
     'REPORT_AS',
   ];
-  const missingColumns = expectedColumns.filter((c) => !(c in rows[0]));
+  const firstRow = rows[0] ?? ({} as Record<string, unknown>);
+  const missingColumns = expectedColumns.filter((c) => !(c in firstRow));
   if (missingColumns.length > 0) {
     return {
       success: false,
@@ -271,7 +272,7 @@ export function parseIBPCSV(
   const { excludeSubspecies = false } = options;
   const cleanContent = stripBOM(csvContent);
 
-  let rows: any[];
+  let rows: Array<Record<string, string>>;
   try {
     rows = csvParse(cleanContent);
   } catch (e) {

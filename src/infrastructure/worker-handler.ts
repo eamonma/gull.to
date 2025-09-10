@@ -1,4 +1,8 @@
-import { RedirectService, RedirectRequest, RedirectResponse } from '@application/redirect-service';
+import {
+  RedirectService,
+  RedirectRequest,
+  RedirectResponse,
+} from '@application/redirect-service';
 import { MappingRecord } from '@domain/types';
 import { DiagnosticHandler } from './diagnostic-handler';
 import { ResponseFactory } from './response-factory';
@@ -13,7 +17,14 @@ export interface WorkerConfig {
 
 // Cloudflare Worker handler interface
 export interface WorkerHandler {
-  fetch(request: Request, env: any, ctx: any): Promise<Response>;
+  fetch(
+    request: Request,
+    env: Record<string, unknown>,
+    ctx: {
+      waitUntil?: (p: Promise<unknown>) => void;
+      passThroughOnException?: () => void;
+    }
+  ): Promise<Response>;
 }
 
 // Implementation of Cloudflare Worker handler
@@ -24,7 +35,7 @@ class WorkerHandlerImpl implements WorkerHandler {
 
   constructor(config: WorkerConfig) {
     this.config = config;
-    
+
     // Initialize redirect service with mapping data
     this.redirectService = new RedirectService(config.mappingData, {
       workerVersion: config.workerVersion,
@@ -32,13 +43,23 @@ class WorkerHandlerImpl implements WorkerHandler {
     });
 
     // Initialize diagnostic handler
-    this.diagnosticHandler = new DiagnosticHandler(this.redirectService, config);
+    this.diagnosticHandler = new DiagnosticHandler(
+      this.redirectService,
+      config
+    );
   }
 
   /**
    * Main Cloudflare Workers fetch handler per instructions.md:22-24
    */
-  async fetch(request: Request, env: any, ctx: any): Promise<Response> {
+  async fetch(
+    request: Request,
+    _env: Record<string, unknown>,
+    _ctx: {
+      waitUntil?: (p: Promise<unknown>) => void;
+      passThroughOnException?: () => void;
+    }
+  ): Promise<Response> {
     try {
       // Extract URL and method from Cloudflare Request
       const url = new URL(request.url);
@@ -69,11 +90,11 @@ class WorkerHandlerImpl implements WorkerHandler {
       const redirectRequest = this.transformRequest(request);
 
       // Process redirect using business logic
-      const redirectResponse = this.redirectService.processRedirect(redirectRequest);
+      const redirectResponse =
+        this.redirectService.processRedirect(redirectRequest);
 
       // Transform internal response to Cloudflare Response
       return this.transformResponse(redirectResponse);
-
     } catch (error) {
       return this.createInternalErrorResponse(error);
     }
@@ -86,7 +107,6 @@ class WorkerHandlerImpl implements WorkerHandler {
     // Handle /g/* paths only, let everything else pass through to Short.io
     return pathname.startsWith('/g/') || pathname === '/g';
   }
-
 
   /**
    * Check if HTTP method is allowed
@@ -126,10 +146,15 @@ class WorkerHandlerImpl implements WorkerHandler {
 
     // Handle successful redirects
     if (redirectResponse.status === 302) {
-      return ResponseFactory.createRedirectResponse(
-        redirectResponse.headers.Location,
-        allHeaders
-      );
+      const location = redirectResponse.headers['Location'];
+      if (!location) {
+        return ResponseFactory.createInternalErrorResponse(
+          new Error('Redirect missing Location header'),
+          this.config.environment !== 'production',
+          allHeaders
+        );
+      }
+      return ResponseFactory.createRedirectResponse(location, allHeaders);
     }
 
     // Handle error responses with JSON body
@@ -186,7 +211,6 @@ class WorkerHandlerImpl implements WorkerHandler {
       'X-Gull-Map': this.config.mapVersion,
     };
   }
-
 }
 
 /**
@@ -206,8 +230,14 @@ export function createWorkerHandler(config: WorkerConfig): WorkerHandler {
     throw new Error('Invalid worker configuration: mappingData is required');
   }
 
-  if (!['production', 'staging', 'development', 'testing'].includes(config.environment)) {
-    throw new Error('Invalid worker configuration: environment must be production, staging, development, or testing');
+  if (
+    !['production', 'staging', 'development', 'testing'].includes(
+      config.environment
+    )
+  ) {
+    throw new Error(
+      'Invalid worker configuration: environment must be production, staging, development, or testing'
+    );
   }
 
   return new WorkerHandlerImpl(config);

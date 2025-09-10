@@ -5,8 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
-    "build": "wrangler publish --dry-run",
-    "deploy": "wrangler publish",
+    "build": "npm run etl && tsc --noEmit",
+    "deploy": "wrangler deploy",
+    "deploy:staging": "wrangler deploy --env staging",
+    "deploy:prod": "wrangler deploy --env production",
     "test": "vitest run",
     "test:watch": "vitest --watch",
     "test:coverage": "vitest --coverage",
@@ -15,6 +17,9 @@
     "lint:fix": "eslint src --ext .ts --fix",
     "format": "prettier --write src/**/*.ts",
     "etl": "tsx src/etl/build-mapping.ts",
+    "map:version": "tsx scripts/detect-map-version.ts",
+    "synthetic:staging": "tsx scripts/synthetic-check.ts https://staging.gull.to",
+    "synthetic:prod": "tsx scripts/synthetic-check.ts https://gull.to",
     "validate": "npm run typecheck && npm run lint && npm run test",
     "ci": "npm run validate && npm run build"
   },
@@ -25,7 +30,7 @@
   "devDependencies": {
     "@types/d3-dsv": "^3.0.7",
     "@types/node": "^20.14.0",
-    "@typescript-eslint/eslint-plugin": "^7.15.0",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
     "@typescript-eslint/parser": "^7.15.0",
     "@vitest/coverage-v8": "^1.6.0",
     "eslint": "^8.57.0",
@@ -35,7 +40,7 @@
     "tsx": "^4.15.0",
     "typescript": "^5.4.5",
     "vitest": "^1.6.0",
-    "wrangler": "^3.57.0"
+    "wrangler": "^4.34.0"
   },
   "engines": {
     "node": ">=18.0.0"

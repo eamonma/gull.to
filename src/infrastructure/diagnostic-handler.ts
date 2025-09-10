@@ -1,4 +1,7 @@
-import { RedirectService, RedirectRequest } from '@application/redirect-service';
+import {
+  RedirectService,
+  RedirectRequest,
+} from '@application/redirect-service';
 import { WorkerConfig } from './worker-handler';
 import { ResponseFactory } from './response-factory';
 
@@ -57,7 +60,10 @@ export class DiagnosticHandler {
   /**
    * Create metadata response for alpha4 code per instructions.md:95
    */
-  private createMetaResponse(pathname: string, headers: Record<string, string>): Response {
+  private createMetaResponse(
+    pathname: string,
+    headers: Record<string, string>
+  ): Response {
     try {
       // Extract alpha4 from path /g/_meta/{alpha4}
       const segments = pathname.split('/');
@@ -84,7 +90,16 @@ export class DiagnosticHandler {
       }
 
       // Look up the alpha4 code
-      const lookupResult = this.redirectService.lookupAlpha4(parseResult.alpha4Code!);
+      const alpha4Code = parseResult.alpha4Code;
+      if (!alpha4Code) {
+        return ResponseFactory.createErrorResponse(
+          400,
+          'INVALID_ALPHA4_FORMAT',
+          'Alpha4 code missing after parse',
+          headers
+        );
+      }
+      const lookupResult = this.redirectService.lookupAlpha4(alpha4Code);
 
       const metaData = {
         input: {
@@ -99,13 +114,12 @@ export class DiagnosticHandler {
             scientific_name: lookupResult.mappingRecord?.scientific_name,
           }),
           destination_url: this.redirectService.generateBOWUrl(
-            lookupResult.success ? lookupResult.ebird6Code! : null
+            lookupResult.success ? (lookupResult.ebird6Code ?? null) : null
           ),
         },
       };
 
       return ResponseFactory.createJsonResponse(metaData, 200, headers);
-
     } catch (error) {
       return ResponseFactory.createInternalErrorResponse(
         error,
@@ -114,7 +128,6 @@ export class DiagnosticHandler {
       );
     }
   }
-
 
   /**
    * Get standard response headers

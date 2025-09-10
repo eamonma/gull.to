@@ -1,4 +1,9 @@
-import { MappingRecord, Alpha4Code, EBirdCode, ScientificName, isValidAlpha4Code, isValidEBirdCode, isValidScientificName } from '@domain/types';
+import {
+  MappingRecord,
+  isValidAlpha4Code,
+  isValidEBirdCode,
+  isValidScientificName,
+} from '@domain/types';
 import { JoinedRecord } from './join-logic';
 
 // Transformation options per instructions.md requirements
@@ -10,7 +15,7 @@ export interface MappingTransformOptions {
 }
 
 // Validation error types for schema validation
-export type MappingValidationErrorType = 
+export type MappingValidationErrorType =
   | 'MISSING_REQUIRED_FIELD'
   | 'INVALID_FIELD_FORMAT'
   | 'INVALID_DATE_FORMAT'
@@ -21,7 +26,7 @@ export interface MappingValidationError {
   readonly type: MappingValidationErrorType;
   readonly field: string;
   readonly message: string;
-  readonly value?: any;
+  readonly value?: unknown;
 }
 
 // Schema validation result
@@ -62,14 +67,29 @@ export interface MappingTransformResult {
  * Validates a single mapping record against the canonical schema
  * per instructions.md:163-172
  */
-export function validateMappingSchema(mapping: any): SchemaValidationResult {
+export function validateMappingSchema(
+  mapping: Record<string, unknown>
+): SchemaValidationResult {
   const errors: MappingValidationError[] = [];
 
   // Required fields validation
-  const requiredFields = ['alpha4', 'ebird6', 'common_name', 'scientific_name', 'source', 'source_version', 'updated_at'];
-  
+  const requiredFields = [
+    'alpha4',
+    'ebird6',
+    'common_name',
+    'scientific_name',
+    'source',
+    'source_version',
+    'updated_at',
+  ];
+
   for (const field of requiredFields) {
-    if (!(field in mapping) || mapping[field] === undefined || mapping[field] === '' || mapping[field] === null) {
+    if (
+      !(field in mapping) ||
+      mapping[field] === undefined ||
+      mapping[field] === '' ||
+      mapping[field] === null
+    ) {
       errors.push({
         type: 'MISSING_REQUIRED_FIELD',
         field,
@@ -80,42 +100,54 @@ export function validateMappingSchema(mapping: any): SchemaValidationResult {
   }
 
   // Format validation for alpha4
-  if (mapping.alpha4 && !isValidAlpha4Code(mapping.alpha4)) {
+  if (
+    typeof mapping['alpha4'] === 'string' &&
+    !isValidAlpha4Code(mapping['alpha4'])
+  ) {
     errors.push({
       type: 'INVALID_FIELD_FORMAT',
       field: 'alpha4',
-      message: `Invalid alpha4 format: ${mapping.alpha4}. Must be exactly 4 uppercase letters A-Z.`,
-      value: mapping.alpha4,
+      message: `Invalid alpha4 format: ${mapping['alpha4']}. Must be exactly 4 uppercase letters A-Z.`,
+      value: mapping['alpha4'],
     });
   }
 
-  // Format validation for ebird6  
-  if (mapping.ebird6 && !isValidEBirdCode(mapping.ebird6)) {
+  // Format validation for ebird6
+  if (
+    typeof mapping['ebird6'] === 'string' &&
+    !isValidEBirdCode(mapping['ebird6'])
+  ) {
     errors.push({
       type: 'INVALID_FIELD_FORMAT',
       field: 'ebird6',
-      message: `Invalid ebird6 format: ${mapping.ebird6}. Must be 4-8 characters: lowercase letters, numbers, x/y.`,
-      value: mapping.ebird6,
+      message: `Invalid ebird6 format: ${mapping['ebird6']}. Must be 4-8 characters: lowercase letters, numbers, x/y.`,
+      value: mapping['ebird6'],
     });
   }
 
   // Scientific name validation
-  if (mapping.scientific_name && !isValidScientificName(mapping.scientific_name)) {
+  if (
+    typeof mapping['scientific_name'] === 'string' &&
+    !isValidScientificName(mapping['scientific_name'])
+  ) {
     errors.push({
       type: 'INVALID_FIELD_FORMAT',
       field: 'scientific_name',
-      message: `Invalid scientific name format: ${mapping.scientific_name}. Must be proper binomial nomenclature.`,
-      value: mapping.scientific_name,
+      message: `Invalid scientific name format: ${mapping['scientific_name']}. Must be proper binomial nomenclature.`,
+      value: mapping['scientific_name'],
     });
   }
 
   // ISO date validation for updated_at
-  if (mapping.updated_at && isNaN(Date.parse(mapping.updated_at))) {
+  if (
+    typeof mapping['updated_at'] === 'string' &&
+    isNaN(Date.parse(mapping['updated_at']))
+  ) {
     errors.push({
       type: 'INVALID_DATE_FORMAT',
       field: 'updated_at',
-      message: `Invalid ISO date format: ${mapping.updated_at}`,
-      value: mapping.updated_at,
+      message: `Invalid ISO date format: ${mapping['updated_at']}`,
+      value: mapping['updated_at'],
     });
   }
 
@@ -135,7 +167,7 @@ export function transformToMappingRecords(
 ): MappingTransformResult {
   // Validate transformation options
   const optionsErrors: MappingValidationError[] = [];
-  
+
   if (!options.source || options.source.trim() === '') {
     optionsErrors.push({
       type: 'INVALID_SOURCE_METADATA',
@@ -213,7 +245,7 @@ export function transformToMappingRecords(
   const mappingRecords: MappingRecord[] = [];
   const errors: MappingValidationError[] = [];
   const seenAlpha4Codes = new Set<string>();
-  
+
   let successfulTransformations = 0;
   let validationErrors = 0;
   let nameConflicts = 0;
@@ -252,9 +284,10 @@ export function transformToMappingRecords(
       if (joinedRecord.commonNameEBird !== joinedRecord.commonNameIBP) {
         nameConflicts++;
         // Use preferred source or default to eBird
-        commonName = options.preferredCommonNameSource === 'ibp' 
-          ? joinedRecord.commonNameIBP 
-          : joinedRecord.commonNameEBird;
+        commonName =
+          options.preferredCommonNameSource === 'ibp'
+            ? joinedRecord.commonNameIBP
+            : joinedRecord.commonNameEBird;
       } else {
         commonName = joinedRecord.commonNameEBird; // They're the same
       }
@@ -262,7 +295,7 @@ export function transformToMappingRecords(
       // Create mapping record
       const mappingRecord: MappingRecord = {
         alpha4: joinedRecord.alpha4Code,
-        ebird6: joinedRecord.ebird6Code, 
+        ebird6: joinedRecord.ebird6Code,
         common_name: commonName,
         scientific_name: joinedRecord.scientificName,
         source: options.source,
@@ -280,7 +313,6 @@ export function transformToMappingRecords(
 
       mappingRecords.push(mappingRecord);
       successfulTransformations++;
-
     } catch (error) {
       errors.push({
         type: 'MISSING_REQUIRED_FIELD',

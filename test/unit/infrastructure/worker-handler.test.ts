@@ -1,6 +1,13 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { WorkerHandler, WorkerConfig, createWorkerHandler } from '@infrastructure/worker-handler';
-import { createAlpha4Code, createEBirdCode, createScientificName } from '@domain/types';
+import { describe, it, expect, beforeEach } from 'vitest';
+import {
+  WorkerConfig,
+  createWorkerHandler,
+} from '@infrastructure/worker-handler';
+import {
+  createAlpha4Code,
+  createEBirdCode,
+  createScientificName,
+} from '@domain/types';
 
 // Mock the Cloudflare Workers global types
 declare const global: any;
@@ -38,7 +45,9 @@ class MockRequest {
   constructor(url: string, options: RequestInit = {}) {
     this.url = url;
     this.method = options.method || 'GET';
-    this.headers = new MockHeaders(options.headers as Record<string, string> || {});
+    this.headers = new MockHeaders(
+      (options.headers as Record<string, string>) || {}
+    );
   }
 }
 
@@ -50,7 +59,9 @@ class MockResponse {
   constructor(body: BodyInit | null, options: ResponseInit = {}) {
     this.body = body;
     this.status = options.status || 200;
-    this.headers = new MockHeaders(options.headers as Record<string, string> || {});
+    this.headers = new MockHeaders(
+      (options.headers as Record<string, string>) || {}
+    );
   }
 
   async text(): Promise<string> {
@@ -95,9 +106,8 @@ describe('Cloudflare Worker HTTP Handler - TDD RED Phase', () => {
   describe('Worker initialization and configuration', () => {
     it('should create worker handler with valid configuration', () => {
       const handler = createWorkerHandler(mockConfig);
-      
       expect(handler).toBeDefined();
-      expect(typeof handler.fetch).toBe('function');
+      expect(typeof (handler as any).fetch).toBe('function');
     });
 
     it('should validate required configuration parameters', () => {
@@ -108,7 +118,9 @@ describe('Cloudflare Worker HTTP Handler - TDD RED Phase', () => {
         environment: 'testing',
       } as WorkerConfig;
 
-      expect(() => createWorkerHandler(invalidConfig)).toThrow('Invalid worker configuration');
+      expect(() => createWorkerHandler(invalidConfig)).toThrow(
+        'Invalid worker configuration'
+      );
     });
 
     it('should support environment-specific configuration', () => {
@@ -135,7 +147,9 @@ describe('Cloudflare Worker HTTP Handler - TDD RED Phase', () => {
       const response = await handler.fetch(request, {}, {});
 
       expect(response.status).toBe(302);
-      expect(response.headers.get('Location')).toBe('https://birdsoftheworld.org/bow/species/amecro');
+      expect(response.headers.get('Location')).toBe(
+        'https://birdsoftheworld.org/bow/species/amecro'
+      );
       expect(response.headers.get('X-Gull-Worker')).toBe('v1.0.0');
       expect(response.headers.get('X-Gull-Map')).toBe('2024.09');
     });
@@ -162,21 +176,28 @@ describe('Cloudflare Worker HTTP Handler - TDD RED Phase', () => {
     });
 
     it('should handle subdomain routing for staging', async () => {
-      const stagingConfig = { ...mockConfig, environment: 'staging' };
+      const stagingConfig: WorkerConfig = {
+        ...mockConfig,
+        environment: 'staging',
+      };
       const handler = createWorkerHandler(stagingConfig);
       const request = new MockRequest('https://staging.gull.to/g/AMCR') as any;
 
       const response = await handler.fetch(request, {}, {});
 
       expect(response.status).toBe(302);
-      expect(response.headers.get('Location')).toBe('https://birdsoftheworld.org/bow/species/amecro');
+      expect(response.headers.get('Location')).toBe(
+        'https://birdsoftheworld.org/bow/species/amecro'
+      );
     });
   });
 
   describe('HTTP method handling', () => {
     it('should handle GET requests for redirects', async () => {
       const handler = createWorkerHandler(mockConfig);
-      const request = new MockRequest('https://gull.to/g/AMCR', { method: 'GET' }) as any;
+      const request = new MockRequest('https://gull.to/g/AMCR', {
+        method: 'GET',
+      }) as any;
 
       const response = await handler.fetch(request, {}, {});
 
@@ -185,7 +206,9 @@ describe('Cloudflare Worker HTTP Handler - TDD RED Phase', () => {
 
     it('should handle HEAD requests for redirects', async () => {
       const handler = createWorkerHandler(mockConfig);
-      const request = new MockRequest('https://gull.to/g/AMCR', { method: 'HEAD' }) as any;
+      const request = new MockRequest('https://gull.to/g/AMCR', {
+        method: 'HEAD',
+      }) as any;
 
       const response = await handler.fetch(request, {}, {});
 
@@ -195,7 +218,9 @@ describe('Cloudflare Worker HTTP Handler - TDD RED Phase', () => {
 
     it('should reject unsupported HTTP methods', async () => {
       const handler = createWorkerHandler(mockConfig);
-      const request = new MockRequest('https://gull.to/g/AMCR', { method: 'POST' }) as any;
+      const request = new MockRequest('https://gull.to/g/AMCR', {
+        method: 'POST',
+      }) as any;
 
       const response = await handler.fetch(request, {}, {});
 
@@ -212,12 +237,16 @@ describe('Cloudflare Worker HTTP Handler - TDD RED Phase', () => {
       const response = await handler.fetch(request, {}, {});
 
       expect(response.status).toBe(302);
-      expect(response.headers.get('Location')).toBe('https://birdsoftheworld.org/');
+      expect(response.headers.get('Location')).toBe(
+        'https://birdsoftheworld.org/'
+      );
     });
 
     it('should handle malformed /g/* paths', async () => {
       const handler = createWorkerHandler(mockConfig);
-      const request = new MockRequest('https://gull.to/g/invalid-format') as any;
+      const request = new MockRequest(
+        'https://gull.to/g/invalid-format'
+      ) as any;
 
       const response = await handler.fetch(request, {}, {});
 
@@ -227,10 +256,12 @@ describe('Cloudflare Worker HTTP Handler - TDD RED Phase', () => {
 
     it('should handle internal errors gracefully', async () => {
       // The config validation happens at creation time
-      expect(() => createWorkerHandler({
-        ...mockConfig,
-        mappingData: null as any, // This should cause an error
-      })).toThrow('Invalid worker configuration');
+      expect(() =>
+        createWorkerHandler({
+          ...mockConfig,
+          mappingData: null as any, // This should cause an error
+        })
+      ).toThrow('Invalid worker configuration');
     });
   });
 
@@ -241,7 +272,7 @@ describe('Cloudflare Worker HTTP Handler - TDD RED Phase', () => {
         method: 'GET',
         headers: {
           'User-Agent': 'Mozilla/5.0',
-          'Accept': 'text/html',
+          Accept: 'text/html',
         },
       }) as any;
 
@@ -277,7 +308,7 @@ describe('Cloudflare Worker HTTP Handler - TDD RED Phase', () => {
   describe('Static asset bundling per instructions.md:80', () => {
     it('should bundle mapping data at build time', () => {
       const handler = createWorkerHandler(mockConfig);
-      
+
       // The handler should have access to the mapping data
       expect(mockConfig.mappingData).toBeDefined();
       expect(mockConfig.mappingData.length).toBeGreaterThan(0);
@@ -286,7 +317,7 @@ describe('Cloudflare Worker HTTP Handler - TDD RED Phase', () => {
     it('should handle missing or empty mapping data', () => {
       const emptyConfig = { ...mockConfig, mappingData: [] };
       const handler = createWorkerHandler(emptyConfig);
-      
+
       expect(handler).toBeDefined();
     });
   });
@@ -305,22 +336,20 @@ describe('Cloudflare Worker HTTP Handler - TDD RED Phase', () => {
 
     it('should handle concurrent requests efficiently', async () => {
       const handler = createWorkerHandler(mockConfig);
-      
-      const requests = Array.from({ length: 10 }, () => 
+      const requests = Array.from({ length: 10 }, () =>
         handler.fetch(new MockRequest('https://gull.to/g/AMCR') as any, {}, {})
       );
-
       const responses = await Promise.all(requests);
-      
-      responses.forEach(response => {
-        expect(response.status).toBe(302);
-      });
+      responses.forEach((response) => expect(response.status).toBe(302));
     });
   });
 
   describe('Environment-specific behavior', () => {
     it('should include environment info in development', async () => {
-      const devConfig = { ...mockConfig, environment: 'development' };
+      const devConfig: WorkerConfig = {
+        ...mockConfig,
+        environment: 'development',
+      };
       const handler = createWorkerHandler(devConfig);
       const request = new MockRequest('https://gull.to/g/AMCR') as any;
 
@@ -331,7 +360,10 @@ describe('Cloudflare Worker HTTP Handler - TDD RED Phase', () => {
     });
 
     it('should handle production security requirements', async () => {
-      const prodConfig = { ...mockConfig, environment: 'production' };
+      const prodConfig: WorkerConfig = {
+        ...mockConfig,
+        environment: 'production',
+      };
       const handler = createWorkerHandler(prodConfig);
       const request = new MockRequest('https://gull.to/g/AMCR') as any;
 
@@ -352,7 +384,7 @@ describe('Cloudflare Worker HTTP Handler - TDD RED Phase', () => {
 
       expect(response.status).toBe(200);
       expect(response.headers.get('Content-Type')).toBe('application/json');
-      
+
       // Should return "ok" status plus worker/map versions
       const body = await response.text();
       const healthData = JSON.parse(body);
@@ -370,7 +402,7 @@ describe('Cloudflare Worker HTTP Handler - TDD RED Phase', () => {
 
       expect(response.status).toBe(200);
       expect(response.headers.get('Content-Type')).toBe('application/json');
-      
+
       const body = await response.text();
       const metaData = JSON.parse(body);
       expect(metaData.input.path).toBe('/g/_meta/AMCR');
@@ -378,7 +410,9 @@ describe('Cloudflare Worker HTTP Handler - TDD RED Phase', () => {
       expect(metaData.resolved.found).toBe(true);
       expect(metaData.resolved.ebird6_code).toBe('amecro');
       expect(metaData.resolved.common_name).toBe('American Crow');
-      expect(metaData.resolved.destination_url).toBe('https://birdsoftheworld.org/bow/species/amecro');
+      expect(metaData.resolved.destination_url).toBe(
+        'https://birdsoftheworld.org/bow/species/amecro'
+      );
     });
 
     it('should handle /g/_meta/{alpha4} endpoint with unknown code', async () => {
@@ -389,13 +423,15 @@ describe('Cloudflare Worker HTTP Handler - TDD RED Phase', () => {
 
       expect(response.status).toBe(200);
       expect(response.headers.get('Content-Type')).toBe('application/json');
-      
+
       const body = await response.text();
       const metaData = JSON.parse(body);
       expect(metaData.input.path).toBe('/g/_meta/UNKN');
       expect(metaData.input.alpha4_code).toBe('UNKN');
       expect(metaData.resolved.found).toBe(false);
-      expect(metaData.resolved.destination_url).toBe('https://birdsoftheworld.org/');
+      expect(metaData.resolved.destination_url).toBe(
+        'https://birdsoftheworld.org/'
+      );
     });
 
     it('should handle /g/_meta/{alpha4} endpoint with invalid alpha4 format', async () => {
@@ -406,7 +442,7 @@ describe('Cloudflare Worker HTTP Handler - TDD RED Phase', () => {
 
       expect(response.status).toBe(400);
       expect(response.headers.get('Content-Type')).toBe('application/json');
-      
+
       const body = await response.text();
       const errorData = JSON.parse(body);
       expect(errorData.error.type).toBe('INVALID_ALPHA4_FORMAT');

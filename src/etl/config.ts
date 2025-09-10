@@ -10,11 +10,11 @@ export const IBP_AOS_DIR = `${RAW_DATA_DIR}/ibp-aos`;
 export const DEFAULT_DATA_YEAR = 2024;
 
 // Canonical filenames
-export function ebirdCsvFile(year: number = DEFAULT_DATA_YEAR) {
+export function ebirdCsvFile(year: number = DEFAULT_DATA_YEAR): string {
   return `${EBIRD_DIR}/ebird-taxonomy-${year}.csv`;
 }
 
-export function ibpAosCsvFile(year: number = DEFAULT_DATA_YEAR) {
+export function ibpAosCsvFile(year: number = DEFAULT_DATA_YEAR): string {
   return `${IBP_AOS_DIR}/ibp-aos-list-${year}.csv`;
 }
 
