@@ -1,6 +1,6 @@
 {
   "name": "gull-to-redirect",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Bird species redirect system for gull.to/g/* paths",
   "type": "module",
   "scripts": {
